@@ -32,6 +32,7 @@ enum eType
   ctFun,
   ctVar,
   ctRec,
+  ctTyp,
 };
 
 using sType = set<eType>;
@@ -45,48 +46,88 @@ class cObj
 public:
   cMod *Parent = Nil;
 
-  bool A_Static;
-
-  string A_Sym;
-  bool A_Dep = false;
-
   virtual ~cObj() = default;
 };
 
-using objList = vector<pair<string, cObj*>>;
 
-
-
-class cMod: public cObj
+// Basis types
+class iType: public cObj
 {
 public:
-  objList Objs;
+  virtual ~iType() = default;
 };
 
+class iSymb: public cObj
+{
+public:
+  virtual ~iSymb() = default;
+
+  string A_Sym;
+
+  bool A_Static;
+  bool A_Dep = false;
+};
+
+
+
+// Virtual (Namespaces)
+class cMod: public iSymb
+{
+public:
+  vector<pair<string, cObj*>> Objs;
+};
+
+
+// Types
+class cRaw: public iType
+{
+public:
+  string R_Type;
+};
+
+class cRec: public iType
+{
+public:
+  vector<pair<string, cObj*>> Objs;
+
+  string R_Anc;
+  cRec  *A_Anc;
+};
+
+class cType_C: public iType
+{
+public:
+  string R_CType;
+};
+
+class cFunT: public iType
+{
+public:
+  iType *A_Ret = Nil;
+
+  vector<string> R_Par;
+  vector<iType*> A_Par;
+};
+
+
+// Symbols
+class cFun: public iSymb
+{
+public:
+  cFunT *A_Type;
+};
+
+class cVar: public iSymb
+{
+public:
+  iType *A_Typ;
+};
+
+
+// Other types
 class cFile: public cMod
 {
 public:
   vector<string> Libs;
-};
-
-
-class cFun: public cObj
-{
-public:
-  string R_Ret;
-  vector<string> R_Par;
-};
-
-class cVar: public cObj
-{
-public:
-  cObj *A_Typ;
-  string R_Typ;
-};
-
-class cRec: public cMod
-{
-public:
-  string R_Anc;
 };
 

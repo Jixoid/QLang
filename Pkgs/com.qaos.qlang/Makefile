@@ -21,7 +21,6 @@ Module = com.jixoid.qlang
 
 Srcs = \
 	Dev/Main.cpp \
-	Dev/Cache.cpp \
 	Dev/Parser.cpp \
 	Dev/Proc.cpp \
 	Dev/Ver.cpp

@@ -31,44 +31,70 @@ using namespace jix;
 
 
 
-// Memory
-bool  __Memory_ObjectExits(cMod *DMod, const string &Name)
+class cParser
 {
-  for (auto &X: DMod->Objs)
-    if (X.first == Name)
-      return true;
-
-  return false;
-}
-
-void  __Memory_ObjectAdd(cMod *DMod, const string &Name, cObj* Obj)
-{
-  DMod->Objs.push_back({Name, Obj});
-}
-
-cObj* __Memory_ObjectGet(cMod *DMod, const string &Name)
-{
-  for (auto &X: DMod->Objs)
-    if (X.first == Name)
-      return X.second;
-
-  throw runtime_error("Object not found");
-}
+protected:
+  // MainRet
+  cFile *__Ret;
 
 
+protected:
+  // Memory
+  bool  __Memory_ObjectExits(cMod *DMod, const string &Name)
+  {
+    for (auto &X: DMod->Objs)
+      if (X.first == Name)
+        return true;
+
+    return false;
+  }
+
+  void  __Memory_ObjectAdd(cMod *DMod, const string &Name, cObj *Obj)
+  {
+    DMod->Objs.push_back({Name, Obj});
+  }
+
+  cObj* __Memory_ObjectGet(cMod *DMod, const string &Name)
+  {
+    for (auto &X: DMod->Objs)
+      if (X.first == Name)
+        return X.second;
+
+    throw runtime_error("Object not found");
+  }
 
 
-cFile* Parse(const string &FPath)
-{
-  // Prepare
-  cFile *Ret = new cFile();
+  bool   __Memory_ObjectExits(cRec *DRec, const string &Name)
+  {
+    for (auto &X: DRec->Objs)
+      if (X.first == Name)
+        return true;
+
+    return false;
+  }
+
+  void   __Memory_ObjectAdd(cRec *DRec, const string &Name, cObj *Obj)
+  {
+    DRec->Objs.push_back({Name, Obj});
+  }
+
+  cObj* __Memory_ObjectGet(cRec *DRec, const string &Name)
+  {
+    for (auto &X: DRec->Objs)
+      if (X.first == Name)
+        return X.second;
+
+    throw runtime_error("Object not found");
+  }
 
 
+
+protected:
   // File
   ifstream *Fin;
   u64 Fin_Size = 0;
 
-  auto __File_Open = [&]()
+  inline void  __File_Open(const string &FPath)
   {
     Fin = new ifstream(FPath, ios::binary);
 
@@ -77,19 +103,20 @@ cFile* Parse(const string &FPath)
     Fin->seekg(0, ios::beg);
   };
 
-  auto __File_Close = [&]()
+  inline void __File_Close()
   {
     delete Fin;
     Fin_Size = 0;
   };
 
 
-
-// Token
-  vector<string> Comment({"#", "//"});
-  vector<char>   Seperater({/*for comment*/'#',  '{','}', ':',';',',', '(',')', '<','>', '[',']', '-','+','/','*','!'});
-  vector<string> BigSyms({/*for comment*/"//",  "->", "<<", ">>", "==", "<=", ">=", "!=", "<>"});
-  vector<char>   IgnSyms({' ', (char)10, (char)13, (char)9});
+protected:
+  // Token
+  vector<char>   Strings   = {'"', '\''};
+  vector<string> Comment   = {"#", "//"};
+  vector<char>   Seperater = {/*for comment -->*/'#',   '{','}', ':',';',',', '(',')', '<','>', '[',']', '-','+','/','*','!'};
+  vector<string> BigSyms   = {/*for comment -->*/"//",  "->", "<<", ">>", "==", "<=", ">=", "!=", "<>"};
+  vector<char>   IgnSyms   = {' ', (char)10, (char)13, (char)9};
 
 
   u32 Step = 0;
@@ -100,13 +127,16 @@ cFile* Parse(const string &FPath)
   #define GetW (*Word)
 
 
-  auto __Tokenize = [&]()
+  void __Tokenize()
   {
     string Tok;
 
     bool _Comment = false;
-    bool _BigSym = false;
+    bool _BigSym  = false;
+    bool _String  = false;
+
     char _SymCac;
+    char _SymStr;
 
     Tokens.clear();
     TokenC = 0;
@@ -119,6 +149,24 @@ cFile* Parse(const string &FPath)
       Fin->read(&Cac, 1);
 
 
+      // String
+      if (_String)
+      {
+        if (Cac == _SymStr)
+        {
+          _String = false;
+
+          Tok = _SymStr +Tok+ _SymStr;
+
+          goto _l_Sep;
+        }
+
+
+        Tok += Cac;
+        continue;
+      }
+
+
       // Comment
       if (_Comment)
       {
@@ -126,6 +174,16 @@ cFile* Parse(const string &FPath)
         continue;
       }
 
+
+      // String
+      for (auto &X: Strings)
+        if (Cac == X)
+        {
+          _String = true;
+          _SymStr = Cac;
+
+          goto _l_Sep;
+        }
 
 
       // BigSym
@@ -236,7 +294,7 @@ cFile* Parse(const string &FPath)
     Word = &Tokens[0];
   };
 
-  auto Next = [&]()
+  void Next()
   {
     Step+= 1;
 
@@ -253,7 +311,7 @@ cFile* Parse(const string &FPath)
     //clog << "W: " << GetW << endl;
   };
 
-  auto IsEnd = [&]() -> bool
+  inline bool IsEnd()
   {
     if (Step < TokenC)
       return false;
@@ -264,26 +322,27 @@ cFile* Parse(const string &FPath)
   };
 
 
-// Word
-  auto __Is_OK = [&](const string &Str)
+protected:
+  // Word
+  inline void __Is_OK(const string &Str)
   {
     if (GetW != Str)
-      throw runtime_error("Word is not valid: " +GetW);
+      throw runtime_error("Word is not valid: " +GetW +", expected: " +Str);
   };
 
-  auto __Is_Number = [&](const string &Str)
+  inline void __Is_Number(const string &Str)
   {
     if (! isdigit(Str[0]))
       throw runtime_error("Word is not number: " +GetW);
   };
 
-  auto __Is_Symbol = [&](const string &Str)
+  inline void __Is_Symbol(const string &Str)
   {
     if (find(Seperater.begin(), Seperater.end(), Str[0]) == Seperater.end())
       throw runtime_error("Word is not symbol: " +GetW);
   };
 
-  auto __Is_Word  = [&](const string &Str)
+  inline void __Is_Word(const string &Str)
   {
     if (isdigit(Str[0]))
       throw runtime_error("Word is not word: " +GetW);
@@ -293,15 +352,259 @@ cFile* Parse(const string &FPath)
 
   };
 
+  inline void __Is_String(const string &Str)
+  {
+    if (Str[0] != '"')
+      throw runtime_error("word is not string");
+  }
 
-// Interpreter
-  function<void (cMod*)> __Int_var = Nil;
-  function<void (cMod*)> __Int_rec = Nil;
-  function<void (cMod*)> __Int_fun = Nil;
-  function<void (cMod*)> __Int_mod = Nil;
+
+protected:
+  // Interpreter
+  void __Int_Route(sType Types, cMod *DMod, bool &UseSkipped)
+  {
+
+    if (Types.count(eType::ctFun) && GetW == "fun")
+    {
+      UseSkipped = true;
+
+      auto X = __Int_Symb_Fun();
+
+      // Find
+      if (__Memory_ObjectExits(DMod, X.first))
+        throw runtime_error("Object already exist: " +X.first);
+      
+      
+      __Memory_ObjectAdd(DMod, X.first, X.second);
+    }
+
+    ef (Types.count(eType::ctVar) && GetW == "var")
+    {
+      UseSkipped = true;
+
+      auto Xs = __Int_Symb_Var();
+      
+      for (auto &X: Xs)
+      {
+        // Find
+        if (__Memory_ObjectExits(DMod, X.first))
+          throw runtime_error("Object already exist: " +X.first);
+        
+        
+        __Memory_ObjectAdd(DMod, X.first, X.second);
+      }
+
+    }
+
+    ef (Types.count(eType::ctRec) && GetW == "rec")
+    {
+      UseSkipped = true;
+
+      // Name
+      Next();
+      __Is_Word(GetW);
+      string Name = GetW;
 
 
-  auto __Int_use = [&]()
+      auto X = __Int_Type_Rec();
+
+      // Find
+      if (__Memory_ObjectExits(DMod, Name))
+        throw runtime_error("Object already exist: " +Name);
+      
+      
+      __Memory_ObjectAdd(DMod, Name, X);
+    }
+
+    ef (Types.count(eType::ctTyp) && GetW == "type")
+    {
+      UseSkipped = true;
+
+      // Name
+      Next();
+      __Is_Word(GetW);
+      string Name = GetW;
+
+
+      auto X = __Int_Type_Type();
+
+      // Find
+      if (__Memory_ObjectExits(DMod, Name))
+        throw runtime_error("Object already exist: " +Name);
+      
+      
+      __Memory_ObjectAdd(DMod, Name, X);
+    }
+
+    ef (Types.count(eType::ctMod) && GetW == "mod")
+    {
+      UseSkipped = true;
+
+      __Int_Mod(DMod);
+    }
+
+    ef (Types.count(eType::ctUse) && GetW == "use")
+    {
+      if (UseSkipped)
+        throw runtime_error("Use must be used before definitions");
+
+      __Int_Use();
+    }
+
+    el
+      throw runtime_error(format("Unknown identifier: {} {{Mod: {}}}",  GetW, "nil"));
+  };
+
+  void __Int_Route(sType Types, cMod *DMod)
+  {
+
+    if (Types.count(eType::ctFun) && GetW == "fun")
+    {
+      auto X = __Int_Symb_Fun();
+
+      // Find
+      if (__Memory_ObjectExits(DMod, X.first))
+        throw runtime_error("Object already exist: " +X.first);
+      
+      
+      __Memory_ObjectAdd(DMod, X.first, X.second);
+    }
+
+    ef (Types.count(eType::ctVar) && GetW == "var")
+    {
+      auto Xs = __Int_Symb_Var();
+      
+      for (auto &X: Xs)
+      {
+        // Find
+        if (__Memory_ObjectExits(DMod, X.first))
+          throw runtime_error("Object already exist: " +X.first);
+        
+        
+        __Memory_ObjectAdd(DMod, X.first, X.second);
+      }
+
+    }
+
+    ef (Types.count(eType::ctRec) && GetW == "rec")
+    {
+      // Name
+      Next();
+      __Is_Word(GetW);
+      string Name = GetW;
+
+
+      auto X = __Int_Type_Rec();
+
+      // Find
+      if (__Memory_ObjectExits(DMod, Name))
+        throw runtime_error("Object already exist: " +Name);
+      
+      
+      __Memory_ObjectAdd(DMod, Name, X);
+    }
+
+    ef (Types.count(eType::ctTyp) && GetW == "type")
+    {
+      // Name
+      Next();
+      __Is_Word(GetW);
+      string Name = GetW;
+
+
+      auto X = __Int_Type_Type();
+
+      // Find
+      if (__Memory_ObjectExits(DMod, Name))
+        throw runtime_error("Object already exist: " +Name);
+      
+      
+      __Memory_ObjectAdd(DMod, Name, X);
+    }
+
+    ef (Types.count(eType::ctMod) && GetW == "mod")
+    {
+      __Int_Mod(DMod);
+    }
+
+    el
+      throw runtime_error(format("Unknown identifier: {} {{Mod: {}}}",  GetW, "nil"));
+  };
+
+  void __Int_Route(sType Types, cRec *DRec)
+  {
+    if (Types.count(eType::ctFun) && GetW == "fun")
+    {
+      auto X = __Int_Symb_Fun();
+
+      // Find
+      if (__Memory_ObjectExits(DRec, X.first))
+        throw runtime_error("Object already exist: " +X.first);
+      
+      
+      __Memory_ObjectAdd(DRec, X.first, X.second);
+    }
+
+    ef (Types.count(eType::ctVar) && GetW == "var")
+    {
+      auto Xs = __Int_Symb_Var();
+      
+      for (auto &X: Xs)
+      {
+        // Find
+        if (__Memory_ObjectExits(DRec, X.first))
+          throw runtime_error("Object already exist: " +X.first);
+        
+        
+        __Memory_ObjectAdd(DRec, X.first, X.second);
+      }
+
+    }
+    
+    ef (Types.count(eType::ctRec) && GetW == "rec")
+    {
+      // Name
+      Next();
+      __Is_Word(GetW);
+      string Name = GetW;
+
+
+      auto X = __Int_Type_Rec();
+
+      // Find
+      if (__Memory_ObjectExits(DRec, Name))
+        throw runtime_error("Object already exist: " +Name);
+      
+      
+      __Memory_ObjectAdd(DRec, Name, X);
+    }
+
+    ef (Types.count(eType::ctTyp) && GetW == "type")
+    {
+      // Name
+      Next();
+      __Is_Word(GetW);
+      string Name = GetW;
+
+
+      auto X = __Int_Type_Type();
+
+      // Find
+      if (__Memory_ObjectExits(DRec, Name))
+        throw runtime_error("Object already exist: " +Name);
+      
+      
+      __Memory_ObjectAdd(DRec, Name, X);
+    }
+
+    el
+      throw runtime_error(format("Unknown identifier: {} {{Mod: {}}}",  GetW, "nil"));
+  };
+
+
+
+  // SYS
+  void __Int_Use()
   {
     Next();
     
@@ -320,254 +623,10 @@ cFile* Parse(const string &FPath)
     Next();
 
 
-    Ret->Libs.push_back(Buf);
+    __Ret->Libs.push_back(Buf);
   };
 
-
-  auto __Int_Route = [&](sType Types, cMod *DMod, bool *UseSkipped = Nil)
-  {
-
-    if (Types.count(eType::ctFun) && GetW == "fun")
-    {
-      if (UseSkipped != Nil)
-        *UseSkipped = true;
-
-      __Int_fun(DMod);
-    }
-
-    ef (Types.count(eType::ctVar) && GetW == "var")
-    {
-      if (UseSkipped != Nil)
-        *UseSkipped = true;
-
-      __Int_var(DMod);
-    }
-
-    ef (Types.count(eType::ctRec) && GetW == "rec")
-    {
-      if (UseSkipped != Nil)
-        *UseSkipped = true;
-
-      __Int_rec(DMod);
-    }
-
-    ef (Types.count(eType::ctMod) && GetW == "mod")
-    {
-      if (UseSkipped != Nil)
-        *UseSkipped = true;
-
-      __Int_mod(DMod);
-    }
-
-    ef (Types.count(eType::ctUse) && GetW == "use")
-    {
-      if (UseSkipped != Nil)
-        if (*UseSkipped)
-          throw runtime_error("Use must be used before definitions");
-
-      __Int_use();
-    }
-
-    el
-      throw runtime_error(format("Unknown identifier: {} {{Mod: {}}}",  GetW, "nil"));
-  };
-
-
-
-  __Int_var = [&](cMod *DMod)
-  {
-    vector<string> Names;
-    string SType;
-
-    cVar *Obj;
-
-    Next();
-
-
-    // Section
-    _l_Sec:
-
-      // Name
-      __Is_Word(GetW);
-      Names.push_back(GetW);
-      Next();
-
-      // ,
-      if (GetW == ",")
-      {
-        Next();
-        goto _l_Sec;
-      }
-
-
-    // :
-    __Is_OK(":");
-    Next();
-
-    // Type
-    __Is_Word(GetW);
-    SType = GetW;
-    Next();
-
-    // ;
-    __Is_OK(";");
-    Next();
-
-
-    // Scan
-    for (auto &Cac: Names)
-    {
-      // Find
-      if (__Memory_ObjectExits(DMod, Cac))
-        throw runtime_error("Object alread exist");
-
-
-      // Add
-      Obj = new cVar();
-      Obj->Parent = DMod;
-      Obj->R_Typ = SType;
-
-      __Memory_ObjectAdd(DMod, Cac, Obj);
-
-      // Log
-      cout << format("·v {} {{R_Typ: {}}}", Cac, Obj->R_Typ) << endl;
-    }
-
-  };
-
-  __Int_rec = [&](cMod *DMod)
-  {
-    string Name;
-    cRec *Obj = new cRec();
-    Obj->Parent = DMod;
-    Next();
-
-
-    // Name
-    __Is_Word(GetW);
-    Name = GetW;
-    Next();
-
-
-    // Find
-    if (__Memory_ObjectExits(DMod, Name))
-      throw runtime_error("Object alread exist");
-
-
-    if (GetW == ":")
-    {
-      Next();
-
-      // Ancestor
-      __Is_Word(GetW);
-      Obj->R_Anc = GetW;
-      Next();
-    }
-
-
-    // {
-    __Is_OK("{");
-    Next();
-
-
-    // Content
-    while (GetW != "}")
-      __Int_Route({ctVar}, Obj);
-
-    Next();
-
-
-    // Add
-    __Memory_ObjectAdd(DMod, Name, Obj);
-
-    cout << format("·r {} {{R_Anc: {}}}", Name, Obj->R_Anc) << endl;
-  };
-
-  __Int_fun = [&](cMod *DMod)
-  {
-    string Name;
-    string Buf;
-
-    cFun *Obj = new cFun();
-    Obj->Parent = DMod;
-    Next();
-
-
-    // Name
-    __Is_Word(GetW);
-    Name = GetW;
-    Next();
-
-
-    // (
-    __Is_OK("(");
-    Next();
-
-
-    Obj->R_Par.clear();
-
-
-    // Params
-    while (GetW != ")")
-    {
-      // Name
-      __Is_Word(GetW);
-      Obj->R_Par.push_back(GetW);
-      Next();
-
-      // ;
-      if (GetW == ";")
-      {
-        Next();
-        continue;
-      }
-    }
-
-
-    // )
-    __Is_OK(")");
-    Next();
-
-
-
-    // Ret
-    if (GetW == "->")
-    {
-      Next();
-
-      // Type
-      __Is_Word(GetW);
-      Obj->R_Ret = {GetW};
-      Next();
-    }
-
-
-    // Find
-    if (__Memory_ObjectExits(DMod, Name))
-      throw runtime_error("Object alread exist");
-
-    __Memory_ObjectAdd(DMod, Name, Obj);
-
-
-    // Code
-    __Is_OK("{");
-    Next();
-    __Is_OK("}");
-    Next();
-
-
-
-    Buf = "";
-    for (auto &Cac: Obj->R_Par)
-      Buf+= Cac +" ";
-
-    Buf = string(Buf.begin(), find_if_not(Buf.rbegin(), Buf.rend(), ::isspace).base());
-
-  
-    cout << format("·f {} {{R_Ret: {}, R_Par: {}}}", Name, Obj->R_Ret, Buf) << endl;
-  };
-
-  __Int_mod = [&](cMod *DMod)
+  void __Int_Mod(cMod *DMod)
   {
     string Name;
     cMod *NMod;
@@ -604,31 +663,288 @@ cFile* Parse(const string &FPath)
     //NMod->Parent = DMod;
 
 
-    cout << format("·m {}", Name) << endl;
+    cout << format("m {}", Name) << endl;
 
     // Content
     while (GetW != "}")
-      __Int_Route({ctMod, ctFun, ctVar, ctRec}, NMod);
+      __Int_Route({ctMod, ctFun, ctVar, ctRec, ctTyp}, NMod);
 
     Next();
   };
 
 
 
+  // Types
+  iType* __Int_Type()
+  {
+    if (GetW == "fun")
+    {
+      Next();
+      return __Int_Type_Fun();
+    }
 
-  // Parse
-  __File_Open();
+
+    ef (GetW == "rec")
+      return __Int_Type_Rec();
 
 
-  bool UseSkipped = false;
+    ef (GetW == "c")
+      return __Int_Type_C();
 
-  while (! IsEnd())
-    __Int_Route({ctUse, ctMod, ctFun, ctVar, ctRec}, Ret, &UseSkipped);
+
+    el
+    {
+      __Is_Word(GetW);
+      string Name = GetW;
+      Next();
+
+      cRaw *Ret = new cRaw();
+      Ret->R_Type = Name;
+      
+      return Ret;
+    }
+
+    //throw runtime_error(format("Unknown identifier: {} {{Mod: {}}}",  GetW, "nil"));
+  }
+
+  iType* __Int_Type_Type()
+  {
+    Next();
+
+
+    // =
+    __Is_OK("=");
+    Next();
 
     
-  __File_Close();
+    return __Int_Type();
+  }
+
+  cRec*    __Int_Type_Rec()
+  {
+    cRec* Ret = new cRec();
+    Next();
+
+
+    if (GetW == ":")
+    {
+      Next();
+
+      // Ancestor
+      __Is_Word(GetW);
+      Ret->R_Anc = GetW;
+      Next();
+    }
+
+
+    // {
+    __Is_OK("{");
+    Next();
+
+
+    // Content
+    while (GetW != "}")
+      __Int_Route({ctVar, ctRec, ctTyp}, Ret);
+
+    Next();
+
+
+    cout << format("r {{R_Anc: {}}}", Ret->R_Anc) << endl;
+
+
+    // Ret
+    return Ret;
+  };
+
+  cFunT*   __Int_Type_Fun()
+  {
+    cFunT* Ret = new cFunT;
+
+
+    // (
+    __Is_OK("(");
+    Next();
+
+
+    // Params
+    while (GetW != ")")
+    {
+      // Name
+      __Is_Word(GetW);
+      Ret->R_Par.push_back(GetW);
+      Next();
+
+      // ;
+      if (GetW == ";")
+      {
+        Next();
+        continue;
+      }
+    }
+
+
+    // )
+    __Is_OK(")");
+    Next();
+
+
+
+    // Ret
+    if (GetW == "->")
+    {
+      Next();
+
+      // Type
+      Ret->A_Ret = __Int_Type();
+    }
+
+
+
+    cout << format("f") << endl;
+
+
+    // Ret
+    return Ret;
+  }
+
+  cType_C* __Int_Type_C()
+  {
+    cType_C *Ret = new cType_C();
+    Next();
+
+
+    // (
+    __Is_OK("(");
+    Next();
+
+
+    // string
+    __Is_String(GetW);
+    Ret->R_CType = GetW;
+    Next();
+
+    // )
+    __Is_OK(")");
+    Next();
+
+
+    // Ret
+    return Ret;
+  }
+
+
+
+  // Symbols
+  vector<pair<string, cVar*>> __Int_Symb_Var()
+  {
+    vector<pair<string, cVar*>> Ret;
+
+    // Vars
+    vector<string> Names;
+
+
+    do
+    {
+      Next();
+
+      // Name
+      __Is_Word(GetW);
+      Names.push_back(GetW);
+      Next();
+    }
+    while (GetW == ",");
+    
+
+
+    // :
+    __Is_OK(":");
+    Next();
+
+
+    // Type
+    iType *SType = __Int_Type();
+    
+
+
+    // Scan
+    for (auto &X: Names)
+    {
+      // Add
+      cVar *Obj = new cVar();
+      Obj->A_Typ = SType;
+
+
+      Ret.push_back({X, Obj});
+
+      // Log
+      cout << format("v {}", X) << endl;
+    }
+
+
+    // Ret
+    return Ret;
+  };
+
+  pair<string, cFun*> __Int_Symb_Fun()
+  {
+    pair<string, cFun*> Ret;
+
+    // Vars
+    Ret.second = new cFun();
+    Next();
+
+
+    // Name
+    __Is_Word(GetW);
+    Ret.first = GetW;
+    Next();
+
+
+    // Type
+    Ret.second->A_Type = __Int_Type_Fun();
+
+
+    // Code
+    __Is_OK("{");
+    Next();
+    __Is_OK("}");
+    Next();
+
 
   
-  return Ret;
+    cout << format("f {}", Ret.first) << endl;
+
+
+    // Ret
+    return Ret;
+  };
+
+
+
+public:
+  cFile* Parse(const string &FPath)
+  {
+    __Ret = new cFile();
+
+    __File_Open(FPath);
+
+    bool UseSkipped = false;
+
+    while (! IsEnd())
+      __Int_Route({ctUse, ctMod, ctFun, ctVar, ctRec, ctTyp}, __Ret, UseSkipped);
+
+    __File_Close();
+
+
+    return __Ret;
+  }
+};
+
+
+cFile* Parse(const string &FPath)
+{
+  cParser Engine;
+
+  return Engine.Parse(FPath);
 }
 

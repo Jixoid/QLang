@@ -108,28 +108,97 @@ int main(int ArgC, char *ArgV[])
 }
 
 
-void Logger(cMod *NMod, string OP = "") { for (auto &X: NMod->Objs)
+
+string Logger(iType *NTyp)
 {
-  // Canonicalize
-  if (dynamic_cast<cFun*>(X.second) != Nil)
-    cout << OP << format("f {} {{Static: {}}}", X.first, X.second->A_Static ? "True":"False") << endl;
+  if (NTyp == Nil)
+    return "void";
+
+  ef (auto C = dynamic_cast<cRaw*>(NTyp); C != Nil)
+    return C->R_Type;
+
+  ef (auto C = dynamic_cast<cType_C*>(NTyp); C != Nil)
+    return format("c({})", C->R_CType);
+
+  ef (auto C = dynamic_cast<cFunT*>(NTyp); C != Nil)
+  {
+    string Buf;
+
+    for (auto &X: C->R_Par)
+      Buf += X +", ";
+
+    return format("fun({}) -> {}", Buf, Logger(C->A_Ret));
+  }
+
+  el
+    return "<unknown>";
+}
 
 
-  ef (dynamic_cast<cVar*>(X.second) != Nil)
-    cout << OP << format("v {} {{Static: {}}}", X.first, X.second->A_Sym) << endl;
+void Logger(cRec *NRec, string OP = "") { for (auto &X: NRec->Objs)
+{
+  cout << OP;
+
+  if (auto C = dynamic_cast<cVar*>(X.second); C != Nil)
+    cout << format("v {}: {}", X.first, Logger(C->A_Typ)) << endl;
+
 
   ef (auto C = dynamic_cast<cRec*>(X.second); C != Nil)
   {
-    cout << OP << format("r {}", X.first) << endl;
+    cout << format("r {}", X.first) << endl;
+    
+    Logger(C, OP +"  ");
+  }
+
+  ef (auto C = dynamic_cast<cType_C*>(X.second); C != Nil)
+  {
+    cout << format("t {} = {}", X.first, Logger(C)) << endl;
+  }
+
+  ef (auto C = dynamic_cast<cFunT*>(X.second); C != Nil)
+  {
+    cout << format("t {} = {}", X.first, Logger(C)) << endl;
+  }
+
+}}
+
+void Logger(cMod *NMod, string OP = "", bool Virt = false) { for (auto &X: NMod->Objs)
+{
+  cout << OP;
+
+
+  // Canonicalize
+  if (auto C = dynamic_cast<cFun*>(X.second); C != Nil)
+    cout << format("f {}: {} {{Symbol: {}, Static: {}}}", X.first, Logger(C->A_Type), Virt ? "Nil":C->A_Sym, C->A_Static) << endl;
+
+
+  ef (auto C = dynamic_cast<cVar*>(X.second); C != Nil)
+    cout << format("v {}: {} {{Symbol: {}, Static: {}}}", X.first, Logger(C->A_Typ), Virt ? "Nil":C->A_Sym, C->A_Static) << endl;
+
+
+  ef (auto C = dynamic_cast<cMod*>(X.second); C != Nil)
+  {
+    cout << format("m {}", X.first) << endl;
 
     Logger(C, OP+"  ");
   }
 
-  ef (auto C = dynamic_cast<cMod*>(X.second); C != Nil)
+  
+  ef (auto C = dynamic_cast<cRec*>(X.second); C != Nil)
   {
-    cout << OP << format("m {}" , X.first) << endl;
+    cout << format("r {}", X.first) << endl;
 
     Logger(C, OP+"  ");
+  }
+
+  ef (auto C = dynamic_cast<cType_C*>(X.second); C != Nil)
+  {
+    cout << format("t {} = {}", X.first, Logger(C)) << endl;
+  }
+
+  ef (auto C = dynamic_cast<cFunT*>(X.second); C != Nil)
+  {
+    cout << format("t {} = {}", X.first, Logger(C)) << endl;
   }
 
 }}
@@ -155,7 +224,7 @@ cFile* Main(vector<string> Files)
 
   cFile *MiniMem;
   cFile *LibMem;
-  vector<cMod*> Mems;
+  vector<cFile*> Mems;
 
 
 

@@ -62,13 +62,22 @@ inline string NS_mod(const string &Name)
 
 
 
+
 // Check
-cObj* Find(cMod *Context, const string &Type, bool Except = true)
+/*
+iType* Find(cMod *Context, const string &Type, bool Except = true)
 {
   // Default Context
   for (auto &X: Context->Objs)
     if (X.first == Type)
-      return X.second;
+    {
+      if (auto C = dynamic_cast<iType*>(X.second); C != Nil)
+        return C;
+      
+      el 
+        throw runtime_error("Symbol is not type");
+    }
+
 
   // Parent
   if (Context->Parent != Nil)
@@ -91,37 +100,45 @@ void Check(cMod *Context, cVar *Obj)
 
   Obj->A_Typ = Find(Context, Obj->R_Typ);
 }
+*/
 
 
 
+void Procer(cRec *NRec) { for (auto &X: NRec->Objs)
+{
+  // Canonicalize
+  if (auto C = dynamic_cast<cRec*>(X.second); C != Nil)
+  {
+    Procer(C);
+  }
+
+}}
 
 void Procer(cMod *NMod, bool Static, string OP) { for (auto &X: NMod->Objs)
 {
   // Canonicalize
   if (auto C = dynamic_cast<cFun*>(X.second); C != Nil)
   {
-    X.second->A_Sym = OP +NS_fun(X.first, "", {});
+    C->A_Sym = OP +NS_fun(X.first, "", {});
   }
 
   ef (auto C = dynamic_cast<cVar*>(X.second); C != Nil)
   {
-    X.second->A_Sym = OP +NS_var(X.first);
+    C->A_Sym = OP +NS_var(X.first);
 
-    Check(NMod, C);
+    //Check(NMod, C);
   }
 
   ef (auto C = dynamic_cast<cRec*>(X.second); C != Nil)
   {
-    X.second->A_Sym = OP +NS_rec(X.first);
-
-    Procer(C, false, X.second->A_Sym);
+    Procer(C);
   }
 
   ef (auto C = dynamic_cast<cMod*>(X.second); C != Nil)
   {
-    X.second->A_Sym = OP +NS_mod(X.first);
+    C->A_Sym = OP +NS_mod(X.first);
 
-    Procer(C, Static, X.second->A_Sym);
+    Procer(C, Static, C->A_Sym);
   }
 
 }}

@@ -22,8 +22,13 @@ While there is no formal contribution guide at this time, the following workflow
     Submit a pull request
 
 
-## 📄 License
+## 📜 License
 
-QLang is licensed under the GNU Lesser General Public License v3.0 (LGPL-3.0).
+QLang project uses multiple licenses:
 
-This license ensures QLang remains open source while allowing others to use it in commercial or closed-source projects. However, any modifications made to QLang itself must be shared under the same open-source terms.
+- GPL for **source code**.
+- LGPL for **build system**.
+- CC BY-SA for **documentation**.
+
+Please see the `LICENSE` file for detailed information.
+You can find the license texts in the `LICENSES` folder.

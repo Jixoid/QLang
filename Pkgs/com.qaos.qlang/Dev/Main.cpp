@@ -25,6 +25,7 @@
 #include "QTypes.hpp"
 #include "Parser.hpp"
 #include "Proc.hpp"
+#include "Write_C.hpp"
 #include "Ver.hpp"
 
 #include "ParamParser.hpp"
@@ -41,14 +42,14 @@ namespace fs = std::filesystem;
 unordered_map<string, cFile*> UnitList;
 
 
-int    FileC;
+u32    FileC;
 char **FileV;
 
 
-void _Compile();
+void _Compile(ParamParser::mod *DefMod);
 
 
-int ModC = 1;
+u32 ModC = 1;
 ParamParser::mod *Mods = (ParamParser::mod[])
 {
   {
@@ -58,16 +59,40 @@ ParamParser::mod *Mods = (ParamParser::mod[])
     .Params = (ParamParser::param[])
     {
       {
-        .Name = "test",
+        .Name = "rtti",
         .Def  = true,
       },
     },
     .ParamC = 1,
 
+    .Inputs = (ParamParser::input[])
+    {
+      {
+        .Name = "syslib",
+        .Value = Nil,
+      }
+    },
+    .InputC = 1,
+
     .Mods = {},
     .ModC = 0,
   },
 };
+
+
+
+bool __rtti;
+
+string __syslib;
+
+
+#define RES "\033[0m"
+#define GRY "\033[1;30m"
+#define RED "\033[1;31m"
+#define GRE "\033[1;32m"
+#define YEL "\033[1;33m"
+#define BLU "\033[1;34m"
+#define MAG "\033[1;35m"
 
 
 
@@ -90,7 +115,6 @@ int Main(int ArgC, char *ArgV[])
   return 0;
 }
 
-
 int main(int ArgC, char *ArgV[])
 {
   try
@@ -99,109 +123,193 @@ int main(int ArgC, char *ArgV[])
   }
   catch (runtime_error E)
   {
-    cout << "An exception encountered!" << endl;
-    cout << "Class: " << typeid(E).name() << endl;
-    cout << "Message: " << E.what() << endl;
+    cerr << RED"An exception encountered!" RES << endl;
+    cerr << "Class: " << typeid(E).name() << endl;
+    cerr << "Message: " << E.what() << endl;
 
     return 2;
   }
 }
 
 
-
-string Logger(iType *NTyp)
+string Dump(cObj *NObj, string Name = "")
 {
-  if (NTyp == Nil)
-    return "void";
+  if (NObj == Nil)
+    return (BLU"void" RES);
 
-  ef (auto C = dynamic_cast<cRaw*>(NTyp); C != Nil)
-    return C->R_Type;
+  
+  ef (auto C = dynamic_cast<sVar*>(NObj); C != Nil)
+    return Dump(C->A_Typ);
 
-  ef (auto C = dynamic_cast<cType_C*>(NTyp); C != Nil)
-    return format("c({})", C->R_CType);
 
-  ef (auto C = dynamic_cast<cFunT*>(NTyp); C != Nil)
+  ef (auto C = dynamic_cast<tRec*>(NObj); C != Nil)
   {
     string Buf;
 
-    for (auto &X: C->R_Par)
-      Buf += X +", ";
 
-    return format("fun({}) -> {}", Buf, Logger(C->A_Ret));
+    if (C->R_Anc != "")
+      Buf = ": "+ C->R_Anc +" ";
+
+
+    Buf += GRY"{";
+
+    for (auto &X: C->Objs)
+      if (dynamic_cast<iType*>(X.second))
+        Buf += MAG"typ " GRE+ X.first +GRY" = "+ Dump(X.second) +GRY"; ";
+      el
+        Buf += YEL"var " GRE+ X.first +GRY": "+ Dump(X.second) +GRY"; ";
+
+
+    return Buf +"}" RES;
   }
 
+
+  ef (auto C = dynamic_cast<tRaw*>(NObj); C != Nil)
+  {
+    if (C->A_Type != Nil)
+      return BLU +C->R_Type +GRY"("+C->A_Type->A_Sym+")" RES;
+    
+    el
+      return BLU +C->R_Type +GRY"(" RED"<unknown>" GRY")" RES;
+  }
+
+
+  ef (auto C = dynamic_cast<tC*>(NObj); C != Nil)
+    return format(MAG"c" GRY"(" RES"{}" GRY", " RES"{}" GRY")" RES, C->R_CType, C->Size);
+
+
+  ef (auto C = dynamic_cast<tFun*>(NObj); C != Nil)
+    return format(YEL"fun " GRE"{}" GRY":" RES" {} -> {}", Name, Dump(C->A_Par), Dump(C->A_Ret));
+
+
   el
-    return "<unknown>";
+    return (RED"<unknown>" RES);
 }
 
 
-void Logger(cRec *NRec, string OP = "") { for (auto &X: NRec->Objs)
+void Logger(iCode::block *NCon, string OP = "") { for (auto &X: NCon->Codes)
 {
   cout << OP;
 
-  if (auto C = dynamic_cast<cVar*>(X.second); C != Nil)
-    cout << format("v {}: {}", X.first, Logger(C->A_Typ)) << endl;
-
-
-  ef (auto C = dynamic_cast<cRec*>(X.second); C != Nil)
+  if (auto C = dynamic_cast<iCode::var*>(X); C != Nil)
   {
-    cout << format("r {}", X.first) << endl;
-    
-    Logger(C, OP +"  ");
+    cout << format(
+      YEL"var " GRE"{}" GRY":" RES" {}" RES,
+      C->Name,
+      Dump(C->Type)
+    ) << endl;
   }
 
-  ef (auto C = dynamic_cast<cType_C*>(X.second); C != Nil)
+  if  (auto C = dynamic_cast<iCode::block*>(X); C != Nil)
   {
-    cout << format("t {} = {}", X.first, Logger(C)) << endl;
-  }
-
-  ef (auto C = dynamic_cast<cFunT*>(X.second); C != Nil)
-  {
-    cout << format("t {} = {}", X.first, Logger(C)) << endl;
+    Logger(C, OP);
   }
 
 }}
 
-void Logger(cMod *NMod, string OP = "", bool Virt = false) { for (auto &X: NMod->Objs)
+void Logger(iCon *NCon, string OP = "", bool Static = true) { for (auto &X: NCon->Objs)
 {
   cout << OP;
 
 
-  // Canonicalize
-  if (auto C = dynamic_cast<cFun*>(X.second); C != Nil)
-    cout << format("f {}: {} {{Symbol: {}, Static: {}}}", X.first, Logger(C->A_Type), Virt ? "Nil":C->A_Sym, C->A_Static) << endl;
-
-
-  ef (auto C = dynamic_cast<cVar*>(X.second); C != Nil)
-    cout << format("v {}: {} {{Symbol: {}, Static: {}}}", X.first, Logger(C->A_Typ), Virt ? "Nil":C->A_Sym, C->A_Static) << endl;
-
-
-  ef (auto C = dynamic_cast<cMod*>(X.second); C != Nil)
+  // Symbols s
+  if (auto C = dynamic_cast<sFun*>(X.second); C != Nil)
   {
-    cout << format("m {}", X.first) << endl;
+    cout << Dump(C->A_Type, X.first);
+
+    if (Static)
+      cout << format(
+        GRY"  ![Symbol: {}{}]" RES,
+
+        C->p_NoMangle ? (C->A_Name):(C->A_Sym.empty() ? RED"<unknown>" GRY:C->A_Sym),
+
+        string(C->p_Extern ? ", extern":"")+
+        (C->p_Export ? ", export":"")+
+        (C->p_CDecl ? ", cdecl":"")+
+        (C->p_Inline ? ", inline":"")+
+        (C->p_NoExcept ? ", noexcept":"")+
+        (C->p_NoMangle ? ", nomangle":"")
+      );
+
+    cout << endl;
+
+
+    // Code
+    Logger(&C->Code, OP+"  ");
+
+    cout << endl;
+  }
+
+
+  ef (auto C = dynamic_cast<sVar*>(X.second); C != Nil)
+  {
+    cout << format(
+      YEL"var " GRE"{}" GRY":" RES" {}" RES,
+      X.first,
+      Dump(C->A_Typ)
+    );
+
+    if (Static)
+      cout << format(
+        "  ![Symbol: {}]" RES,
+        C->A_Sym.empty() ? RED"<unknown>" GRY:C->A_Sym
+      );
+    
+    cout << endl;
+  }
+
+
+  // Virtual
+  ef (auto C = dynamic_cast<vMod*>(X.second); C != Nil)
+  {
+    cout << format(RED"mod" RES" {}", X.first);
+
+    if (Static)
+      cout << format("  ![Symbol: {}]", C->A_Sym);
+
+    cout << endl;
+
 
     Logger(C, OP+"  ");
   }
 
   
-  ef (auto C = dynamic_cast<cRec*>(X.second); C != Nil)
+  // Types v
+  ef (auto C = dynamic_cast<tRec*>(X.second); C != Nil)
   {
-    cout << format("r {}", X.first) << endl;
+    cout << format(
+      MAG"rec" GRE" {}" GRY"  ![VSym: {}, Size: " RES"{}" GRY"{}]" RES,
+      X.first,
+      C->A_Sym.empty() ? RED"<unknown>" GRY:C->A_Sym,
+      C->Size,
+      (C->p_Packed ? ", packed":"")
+    ) << endl;
 
-    Logger(C, OP+"  ");
+
+    Logger(C, OP+"  ", false);
+
+    cout << endl;
   }
 
-  ef (auto C = dynamic_cast<cType_C*>(X.second); C != Nil)
+
+  ef (auto C = dynamic_cast<tC*>(X.second); C != Nil)
   {
-    cout << format("t {} = {}", X.first, Logger(C)) << endl;
+    cout << format(
+      MAG"typ " GRE"{} " GRY"= {}" GRY"  ![VSymbol: {}]" RES,
+      X.first,
+      Dump(C),
+      C->A_Sym.empty() ? RED"<unknown>" GRY:C->A_Sym
+    ) << endl;
   }
 
-  ef (auto C = dynamic_cast<cFunT*>(X.second); C != Nil)
+
+  ef (auto C = dynamic_cast<tFun*>(X.second); C != Nil)
   {
-    cout << format("t {} = {}", X.first, Logger(C)) << endl;
+    cout << format("t {} = {}  ![VSymbol: {}]", X.first, Dump(C), C->A_Sym) << endl;
   }
 
 }}
+
 
 
 cFile* Main(vector<string> Files)
@@ -232,7 +340,7 @@ cFile* Main(vector<string> Files)
   {
     string Cac = fs::canonical(X);
 
-    cout << endl << "@SYS: File: " << Cac << endl;
+    cout << endl << "----- Read: " << Cac << " -----" << endl;
 
 
     // Check file
@@ -254,21 +362,30 @@ cFile* Main(vector<string> Files)
 
 
     // Parser
-    cout << endl << "@SYS: Parse" << endl;
+    cout << endl << "----- Parse -----" << endl;
     MiniMem = Parse(Cac);
 
 
     // Libs
-    //LibMem = Main(MiniMem->Libs);
+    for (auto &X: MiniMem->Libs)
+      X = __syslib +"/"+ X +".ql";
+  
+      
+    LibMem = Main(MiniMem->Libs);
 
 
     // Proc
-    cout << endl << "@SYS: Proc" << endl;
+    cout << endl << "----- Proc -----" << endl;
     Procer(MiniMem);
 
 
+    // Write
+    cout << endl << "----- Write -----" << endl;
+    WriteTo(MiniMem, Cac+".c");
+
+
     // Log
-    cout << endl << "@SYS: Log" << endl;
+    cout << endl << "----- Log -----" << endl;
     Logger(MiniMem);
 
 
@@ -285,10 +402,16 @@ cFile* Main(vector<string> Files)
 
 
 
-void _Compile()
+void _Compile(ParamParser::mod *DefMod)
 {
   if (FileC == 0)
     throw runtime_error("File queue is empty");
+
+
+  __rtti = ParamParser::GetPropP(DefMod, "rtti");
+  
+  __syslib = ParamParser::GetPropI(DefMod, "syslib");
+
 
 
   vector<string> Files;

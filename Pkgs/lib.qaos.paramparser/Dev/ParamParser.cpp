@@ -12,10 +12,11 @@
 
 
 #define ef  else if
+#define el  else
 
 #include <iostream>
 #include <vector>
-#include <regex>
+#include <string.h>
 
 
 #include "Basis.hpp"
@@ -25,9 +26,9 @@
 
 
 namespace jix::ParamParser
-{  
+{
 
-  void Parse(int ArgC, char *ArgV[], i32 ModC, mod ModV[], i32 &FileC, char **&FileV)
+  void Parse(int ArgC, char *ArgV[], u32 ModC, mod ModV[], u32 &FileC, char **&FileV)
   {
     mod *NCon  = ModV;
     i32  NConC = ModC;
@@ -52,8 +53,8 @@ namespace jix::ParamParser
         {
           NMod = &NCon[j];
 
-          NConC = NCon[j].ModC;
-          NCon  = NCon[j].Mods;
+          NConC = NMod->ModC; // NCon[j].ModC;
+          NCon  = NMod->Mods; // NCon[j].Mods;
 
           goto _l_NextMod;
         }
@@ -88,16 +89,30 @@ namespace jix::ParamParser
       }
 
 
+      // Input
+      if (auto Pos = Cac.find('='); Pos != string::npos)
+      {
+        string Buf1 = Cac.substr(0, Pos);
+        string Buf2 = Cac.substr(Pos +1);
 
-      for (int j = 0; j < NMod->ParamC; j++)
-        if (NMod->Params[j].Name == Cac)
-        {
-          NMod->Params[j].Def = Def;
+        for (int j = 0; j < NMod->InputC; j++)
+          if (NMod->Inputs[j].Name == Buf1)
+          {
+            NMod->Inputs[j].Value = strdup(Buf2.c_str());
 
-          //WriteLn('per: ' +Cac, ' = ', Def);
+            goto _l_NextPar;
+          }
+      }
+      el
+      {
+        for (int j = 0; j < NMod->ParamC; j++)
+          if (NMod->Params[j].Name == Cac)
+          {
+            NMod->Params[j].Def = Def;
 
-          goto _l_NextPar;
-        }
+            goto _l_NextPar;
+          }
+      }
 
       throw runtime_error("Unknown param: " +Cac);
 
@@ -129,7 +144,26 @@ namespace jix::ParamParser
 
 
 
-    NMod->Method(); 
+    NMod->Method(NMod); 
+  }
+
+
+  bool  GetPropP(mod *DefMod, char *ParamName)
+  {
+    for (int i = 0; i < DefMod->ParamC; i++)
+      if (DefMod->Params[i].Name == string(ParamName))
+        return DefMod->Params[i].Def;
+
+    throw runtime_error("Parameter not found");
+  }
+
+  char* GetPropI(mod *DefMod, char *InputName)
+  {
+    for (int i = 0; i < DefMod->InputC; i++)
+      if (DefMod->Inputs[i].Name == string(InputName))
+        return DefMod->Inputs[i].Value;
+
+    throw runtime_error("Input not found");
   }
 
 }

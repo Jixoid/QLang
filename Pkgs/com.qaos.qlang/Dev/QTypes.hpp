@@ -39,85 +39,174 @@ using sType = set<eType>;
 
 
 
-class cMod;
+class iCon;
 
 class cObj
 {
 public:
-  cMod *Parent = Nil;
+  iCon *Parent = Nil;
+
+  string A_Sym;
+  string A_Name;
+  bool D_Writed = false;
 
   virtual ~cObj() = default;
 };
 
 
+
 // Basis types
-class iType: public cObj
+class iType: public virtual cObj
 {
 public:
-  virtual ~iType() = default;
+  u32 Size = 0;
 };
 
-class iSymb: public cObj
+class iSymb: public virtual cObj
 {
 public:
-  virtual ~iSymb() = default;
-
-  string A_Sym;
-
-  bool A_Static;
-  bool A_Dep = false;
+  bool p_Extern = false;
+  bool p_Export = false;
 };
+
+class iCon: public virtual cObj
+{
+public:
+  vector<pair<string, cObj*>> Objs;
+};
+
+
+// Code
+namespace iCode
+{
+  class code
+  {
+  public:
+    virtual ~code() = default;
+  };
+
+
+  class val: public virtual code
+  {
+  public:
+    iType *Type = Nil;
+  };
+
+
+
+  // Block
+  class block: public code
+  {
+  public:
+    vector<code*> Codes;
+    block *Parent = Nil;
+  };
+
+
+  // Codes
+  class var: public val
+  {
+  public:
+    string Name;
+    iType *Type;
+    val   *Default = Nil;
+  };
+
+  class assign: public code
+  {
+  public:
+    var *Var;
+    val *Value;
+  };
+
+  class call: public val
+  {
+  public:
+    string Name;
+
+    vector<val*> Pars;
+  };
+
+
+  // ...
+  class _if: public code
+  {
+  public:
+    val *Cond;
+
+    block Then;
+    block Else;
+  };
+
+  class _while: public code
+  {
+  public:
+    val *Cond;
+
+    block Body;
+  };
+
+}
 
 
 
 // Virtual (Namespaces)
-class cMod: public iSymb
+class vMod: public iSymb, public iCon
 {
 public:
-  vector<pair<string, cObj*>> Objs;
+
 };
 
 
 // Types
-class cRaw: public iType
+class tRaw: public iType
 {
 public:
   string R_Type;
+  iType *A_Type = Nil;
 };
 
-class cRec: public iType
+class tRec: public iType, public iCon
 {
 public:
-  vector<pair<string, cObj*>> Objs;
-
   string R_Anc;
-  cRec  *A_Anc;
+  tRec  *A_Anc;
+
+  bool p_Packed;
 };
 
-class cType_C: public iType
+class tFun: public iType
+{
+public:
+  tRec  *A_Par;
+  iType *A_Ret = Nil;
+
+  bool p_CDecl = false;
+};
+
+class tC: public iType
 {
 public:
   string R_CType;
 };
 
-class cFunT: public iType
-{
-public:
-  iType *A_Ret = Nil;
-
-  vector<string> R_Par;
-  vector<iType*> A_Par;
-};
-
 
 // Symbols
-class cFun: public iSymb
+class sFun: public iSymb
 {
 public:
-  cFunT *A_Type;
+  tFun *A_Type;
+
+  iCode::block Code;
+
+
+  bool p_CDecl = false;
+  bool p_Inline = false;
+  bool p_NoExcept = false;
+  bool p_NoMangle = false;
 };
 
-class cVar: public iSymb
+class sVar: public iSymb
 {
 public:
   iType *A_Typ;
@@ -125,7 +214,7 @@ public:
 
 
 // Other types
-class cFile: public cMod
+class cFile: public vMod
 {
 public:
   vector<string> Libs;

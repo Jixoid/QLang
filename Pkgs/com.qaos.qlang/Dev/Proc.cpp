@@ -32,43 +32,57 @@ using namespace jix;
 // QABI
 inline string NS_var(const string &Name)
 {
-  return format("·v{}{}", Name.size(), Name);
+  return format("_v{}{}", Name.size(), Name);
 }
 
 inline string NS_rec(const string &Name)
 {
-  return format("·r{}{}", Name.size(), Name);
+  return format("_r{}{}", Name.size(), Name);
+}
+
+inline string NS_typ(const string &Name)
+{
+  return format("_t{}{}", Name.size(), Name);
+}
+
+inline string NS_typC(const string &Name)
+{
+  return format("_tc{}{}", Name.size(), Name);
+}
+
+inline string NS_typF(const string &Name)
+{
+  return format("_tf{}{}", Name.size(), Name);
 }
 
 inline string NS_fun(const string &Name, const string &RetV, const vector<string> &Params)
 {
-  string Ret = format("·f{}{}", Name.size(), Name);
+  string Ret = format("_f{}{}", Name.size(), Name);
 
   // Ret
   if (! RetV.empty())
-    Ret += format("_r{}{}", RetV.size(), RetV);
+    Ret += format("__r{}{}", RetV.size(), RetV);
 
   // Params
   for (auto &X: Params)
-    Ret += format("_p{}{}", X.size(), X);
+    Ret += format("__p{}{}", X.size(), X);
 
   return Ret;
 }
 
 inline string NS_mod(const string &Name)
 {
-  return format("·m{}{}", Name.size(), Name);
+  return format("_m{}{}", Name.size(), Name);
 }
 
 
 
 
 // Check
-/*
-iType* Find(cMod *Context, const string &Type, bool Except = true)
+iType* Find(iCon *Con, const string &Type, bool Except = true)
 {
   // Default Context
-  for (auto &X: Context->Objs)
+  for (auto &X: Con->Objs)
     if (X.first == Type)
     {
       if (auto C = dynamic_cast<iType*>(X.second); C != Nil)
@@ -80,8 +94,8 @@ iType* Find(cMod *Context, const string &Type, bool Except = true)
 
 
   // Parent
-  if (Context->Parent != Nil)
-    if (auto X = Find(Context->Parent, Type, false); X != Nil)
+  if (Con->Parent != Nil)
+    if (auto X = Find(Con->Parent, Type, false); X != Nil)
       return X;
   
 
@@ -94,52 +108,70 @@ iType* Find(cMod *Context, const string &Type, bool Except = true)
 }
 
 
-void Check(cMod *Context, cVar *Obj)
+void IfRaw(iCon *Con, iType *Type)
 {
-  cout << format("@CHECK(Var) {{R_Typ: {}}}", Obj->R_Typ) << endl;
-
-  Obj->A_Typ = Find(Context, Obj->R_Typ);
+  if (auto C = dynamic_cast<tRaw*>(Type); C != Nil)
+    C->A_Type = Find(Con, C->R_Type);
 }
-*/
 
 
 
-void Procer(cRec *NRec) { for (auto &X: NRec->Objs)
+void Procer(iCon *NCon, cObj *NObj, const string &Name, bool Static, string OP)
 {
-  // Canonicalize
-  if (auto C = dynamic_cast<cRec*>(X.second); C != Nil)
+  // Symbols
+  if (auto C = dynamic_cast<sFun*>(NObj); C != Nil)
   {
-    Procer(C);
+    if (Static)
+      C->A_Sym = OP +NS_fun(Name, "", {});
+
+    Procer(NCon, C->A_Type, "", false, C->A_Sym);
   }
 
-}}
+  ef (auto C = dynamic_cast<sVar*>(NObj); C != Nil)
+  {
+    if (Static)
+      C->A_Sym = OP +NS_var(Name);
 
-void Procer(cMod *NMod, bool Static, string OP) { for (auto &X: NMod->Objs)
+
+    IfRaw(NCon, C->A_Typ);
+  }
+
+
+  // Types
+  ef (auto C = dynamic_cast<tRaw*>(NObj); C != Nil)
+  {
+    C->A_Sym = OP +NS_typ(Name);
+
+    IfRaw(NCon, C);
+  }
+
+  ef (auto C = dynamic_cast<tRec*>(NObj); C != Nil)
+  {
+    C->A_Sym = OP +NS_rec(Name);
+
+    Procer(C, false, C->A_Sym);
+  }
+
+  ef (auto C = dynamic_cast<tC*>(NObj); C != Nil)
+  {
+    C->A_Sym = OP +NS_typC(Name);
+  }
+
+  ef (auto C = dynamic_cast<tFun*>(NObj); C != Nil)
+  {
+    C->A_Sym = OP +NS_typF(Name);
+
+    if (C->A_Ret != Nil)
+      Procer(NCon, C->A_Ret, "o", false, C->A_Sym);
+
+    Procer(NCon, C->A_Par, "i", false, C->A_Sym);
+  }
+  
+}
+
+void Procer(iCon *NCon, bool Static, string OP)
 {
-  // Canonicalize
-  if (auto C = dynamic_cast<cFun*>(X.second); C != Nil)
-  {
-    C->A_Sym = OP +NS_fun(X.first, "", {});
-  }
-
-  ef (auto C = dynamic_cast<cVar*>(X.second); C != Nil)
-  {
-    C->A_Sym = OP +NS_var(X.first);
-
-    //Check(NMod, C);
-  }
-
-  ef (auto C = dynamic_cast<cRec*>(X.second); C != Nil)
-  {
-    Procer(C);
-  }
-
-  ef (auto C = dynamic_cast<cMod*>(X.second); C != Nil)
-  {
-    C->A_Sym = OP +NS_mod(X.first);
-
-    Procer(C, Static, C->A_Sym);
-  }
-
-}}
+  for (auto &X: NCon->Objs)
+    Procer(NCon, X.second, X.first, Static, OP);
+}
 

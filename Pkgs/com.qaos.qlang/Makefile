@@ -23,6 +23,7 @@ Srcs = \
 	Dev/Main.cpp \
 	Dev/Parser.cpp \
 	Dev/Proc.cpp \
+	Dev/Write_C.cpp \
 	Dev/Ver.cpp
 
 Dirs = \

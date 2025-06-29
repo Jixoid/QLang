@@ -25,4 +25,4 @@ using namespace jix;
 
 
 
-void Procer(cMod *NMod, bool Static = true, string OP = "");
+void Procer(iCon *NCon, bool Static = true, string OP = "");

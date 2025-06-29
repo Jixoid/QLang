@@ -1,27 +1,4 @@
 
-> [!warning] This document is part of the **QLang**
-> Licensed under the [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
->
-> Copyright (c) 2025 by Kadir Aydın.
-
-
-___
-## Type C
-
-`cType_C(cObj, iType)`
-
-> [!warning] Usage
-> This is a usage that should be avoided.
-
-Definition:
-```kotlin
-type u32 = c("unsigned int");
-
-// anonymous decl
-var X: c("unsigned int");
-```
-
-
 ___
 ## Record
 
@@ -31,23 +8,59 @@ Definition:
 ```kotlin
 rec myRec {
   var X,Y: u32;
-};
+}
 
 // or
 type myRec = rec {
   var X,Y: u32;
-};
+}
+
+// or
+type myRec = {
+  var X,Y: u32;
+}
 
 
 // inheritance
-type myRec2 = rec(myRec) {
+type myRec2 = rec: myRec {
   var Z: u32;
 }
 
 
 // anonymous record
-var myVar: rec {
+var myVar: {
   var X,Y: u32;
-};
+}
 ```
 
+
+___
+## Function
+
+`cFun(cObj, iSymb)`
+`cFunT(cObj, iType)`
+
+Definition:
+```kotlin
+fun Add: {X,Y: u32} -> u32
+{
+  ret (X + Y);
+}
+
+fun Big: {p0,p1: u32} -> {Big: u32; IsBig: bool}
+{
+  ret {(p0 > p1) ? p0:p1, p0>p1};
+}
+
+
+// Definition
+type fAdd = fun: {X,Y: u32} -> u32
+
+fun: main {} -> u32
+{
+  var myAdd: fAdd;
+  myAdd ​= @Add;
+
+  myAdd(2,3);
+}
+```

@@ -33,19 +33,31 @@ namespace jix::ParamParser
     bool  Def;
   };
 
+  struct input
+  {
+    char *Name;
+    char *Value;
+  };
+
   struct mod
   {
     char  *Name;
-    void (*Method)();
+    void (*Method)(mod* DefMod);
     
     param *Params;
-    i32    ParamC;
+    u32    ParamC;
+
+    input *Inputs;
+    u32    InputC;
 
     mod   *Mods;
-    i32    ModC;
+    u32    ModC;
   };
 
 
-  void Parse(int ArgC, char *ArgV[], i32 ModC, mod ModV[],  i32 &FileC, char **&FileV);
+  bool  GetPropP(mod *DefMod, char *ParamName);
+  char* GetPropI(mod *DefMod, char *InputName);
+
+  void Parse(int ArgC, char *ArgV[], u32 ModC, mod ModV[],  u32 &FileC, char **&FileV);
 
 }
